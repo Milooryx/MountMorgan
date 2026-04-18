@@ -11,8 +11,8 @@
     .instructions {
       position: fixed; top: 12px; left: 12px; z-index: 10;
       background: rgba(0,0,0,0.65); color: #fff;
-      padding: 10px 14px; border-radius: 8px; font-size: 14px;
-      font-family: Arial, sans-serif;
+      padding: 10px 14px; border-radius: 8px; font-size: 13px;
+      font-family: Arial, sans-serif; line-height: 1.6;
     }
     .capture-btn {
       position: fixed; bottom: 32px; left: 50%;
@@ -20,6 +20,12 @@
       background: white; border: none; border-radius: 50%;
       width: 70px; height: 70px; cursor: pointer;
       box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    }
+    .reset-btn {
+      position: fixed; bottom: 32px; right: 20px; z-index: 10;
+      background: rgba(255,255,255,0.2); border: 2px solid white;
+      color: white; border-radius: 8px; padding: 10px 14px;
+      font-size: 13px; font-family: Arial, sans-serif; cursor: pointer;
     }
     .flash {
       position: fixed; inset: 0; background: white;
@@ -29,8 +35,14 @@
   </style>
 </head>
 <body>
-  <div class="instructions">Point camera at your printed marker</div>
+  <div class="instructions">
+    👆 Drag — move<br>
+    🤏 Pinch — scale<br>
+    🔄 Twist — rotate<br>
+    ⬜ Tap circle — photo
+  </div>
   <button class="capture-btn" onclick="captureAR()"></button>
+  <button class="reset-btn" onclick="resetModel()">Reset</button>
   <div class="flash" id="flash"></div>
 
   <a-scene
@@ -41,10 +53,11 @@
 
     <a-marker type="pattern" url="pattern-Marker002.patt">
       <a-entity
+        id="myModel"
         gltf-model="MtM_01_stat.glb"
         position="0 0 0"
         rotation="0 0 0"
-        scale="0.3 0.3 0.3">
+        scale="1 1 1">
       </a-entity>
     </a-marker>
 
@@ -52,6 +65,120 @@
   </a-scene>
 
   <script>
+    // --- State ---
+    let currentScale = 1;
+    let currentRotY = 0;
+    let currentPosX = 0;
+    let currentPosZ = 0;
+
+    // Default values for reset
+    const DEFAULT = { scale: 1, rotY: 0, posX: 0, posZ: 0 };
+
+    // --- Touch tracking ---
+    let lastPinchDistance = null;
+    let lastTwistAngle = null;
+    let lastDragX = null;
+    let lastDragZ = null;
+
+    function getModel() {
+      return document.getElementById('myModel');
+    }
+
+    function applyTransform() {
+      const model = getModel();
+      model.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
+      model.setAttribute('rotation', `0 ${currentRotY} 0`);
+      model.setAttribute('position', `${currentPosX} 0 ${currentPosZ}`);
+    }
+
+    function resetModel() {
+      currentScale = DEFAULT.scale;
+      currentRotY = DEFAULT.rotY;
+      currentPosX = DEFAULT.posX;
+      currentPosZ = DEFAULT.posZ;
+      applyTransform();
+    }
+
+    // --- Helpers ---
+    function getPinchDistance(e) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function getTwistAngle(e) {
+      const dx = e.touches[1].clientX - e.touches[0].clientX;
+      const dy = e.touches[1].clientY - e.touches[0].clientY;
+      return Math.atan2(dy, dx) * (180 / Math.PI);
+    }
+
+    function getMidpoint(e) {
+      return {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+      };
+    }
+
+    // --- Touch events ---
+    document.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        lastPinchDistance = getPinchDistance(e);
+        lastTwistAngle = getTwistAngle(e);
+        lastDragX = null;
+        lastDragZ = null;
+      } else if (e.touches.length === 1) {
+        lastDragX = e.touches[0].clientX;
+        lastDragZ = e.touches[0].clientY;
+      }
+    });
+
+    document.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+
+      if (e.touches.length === 2) {
+        // --- Scale (pinch) ---
+        const newDistance = getPinchDistance(e);
+        if (lastPinchDistance) {
+          const ratio = newDistance / lastPinchDistance;
+          currentScale = Math.min(Math.max(currentScale * ratio, 0.05), 15);
+        }
+        lastPinchDistance = newDistance;
+
+        // --- Rotate (twist) ---
+        const newAngle = getTwistAngle(e);
+        if (lastTwistAngle !== null) {
+          const delta = newAngle - lastTwistAngle;
+          currentRotY += delta;
+        }
+        lastTwistAngle = newAngle;
+
+      } else if (e.touches.length === 1) {
+        // --- Position (drag) ---
+        if (lastDragX !== null) {
+          const dx = (e.touches[0].clientX - lastDragX) * 0.005;
+          const dz = (e.touches[0].clientY - lastDragZ) * 0.005;
+          currentPosX += dx;
+          currentPosZ += dz;
+        }
+        lastDragX = e.touches[0].clientX;
+        lastDragZ = e.touches[0].clientY;
+      }
+
+      applyTransform();
+    }, { passive: false });
+
+    document.addEventListener('touchend', (e) => {
+      if (e.touches.length < 2) {
+        lastPinchDistance = null;
+        lastTwistAngle = null;
+      }
+      if (e.touches.length === 0) {
+        lastDragX = null;
+        lastDragZ = null;
+      }
+    });
+
+    // --- Capture ---
     function captureAR() {
       const flash = document.getElementById('flash');
       flash.style.opacity = '1';
