@@ -47,13 +47,17 @@
     arjs="sourceType: webcam; debugUIEnabled: false;"
     renderer="preserveDrawingBuffer: true;">
 
+    <a-assets>
+      <img id="myimage" src="MountMorgan3_fig-mountMorgan-6Tracks-202312064.jpg">
+    </a-assets>
+
     <a-marker type="pattern" url="pattern-Marker002.patt">
-      <a-entity id="myModel"
-        gltf-model="Ornith_20260419.glb"
-        position="0 0 0"
-        rotation="0.0 0.0 0.0"
-        scale="1.00 1.00 1.00">
-      </a-entity>
+      <a-image
+        src="#myimage"
+        width="1.60" height="1.60"
+        position="0 0.1 0"
+        rotation="-90 0 0">
+      </a-image>
     </a-marker>
 
     <a-entity camera></a-entity>
